@@ -4,6 +4,4 @@ fn main() {
         eprintln!("{}", err);
         std::process::exit(1);
     }
-    
-    println!("main succeed!")
 }

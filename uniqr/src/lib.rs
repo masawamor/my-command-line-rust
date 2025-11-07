@@ -1,11 +1,15 @@
-use std::error::Error;
+use std::{error::Error, io::{self, BufRead, BufReader, Write}};
 
 use clap::Arg;
 
-const PRG: &str = "uniqr";
-const ARG_IN_FILE: &str = "in_file";
-const ARG_OUT_FILE: &str = "out_file";
-const ARG_COUNT: &str = "count";
+pub mod Const {
+    pub const PRG: &str = "uniqr";
+    pub const ARG_IN_FILE: &str = "in_file";
+    pub const ARG_OUT_FILE: &str = "out_file";
+    pub const ARG_COUNT: &str = "count";
+}
+
+use Const::*;
 
 pub type MyResult<T> = Result<T, Box<dyn Error>>;
 
@@ -14,6 +18,11 @@ pub struct Config {
     in_file: String,
     out_file: Option<String>,
     count: bool,
+}
+
+struct PrevItem {
+    line: String,
+    count: u32,
 }
 
 // ############################################################################
@@ -56,8 +65,58 @@ pub fn get_args() -> MyResult<Config> {
 }
 
 pub fn run(config: Config) -> MyResult<()> {
-    println!("{:?}", config);
+    
+    let mut file = open(&config.in_file)
+        .map_err(|e| format!("{}: {}", config.in_file, e) )?;
+    
+    let mut out_file: Box<dyn Write> = match &config.out_file {
+        Some(filename) => Box::new(std::fs::File::create(filename)?),
+        None => Box::new(io::stdout()),
+    };
+    
+    let mut prev_item = PrevItem { line: "".to_string(), count: 0 };
+    
+    let mut line = String::new();
+    
+    let mut print = |prev_item: &PrevItem| -> MyResult<()> {
+        if prev_item.count > 0 {
+            if config.count {
+                write!(out_file, "{:>4} {}", prev_item.count, prev_item.line)?;
+            } else {
+                write!(out_file, "{}", prev_item.line)?;
+            }
+        }
+        Ok(())
+    };
+    
+    loop {
+        
+        let bytes = file.read_line(&mut line)?;
+        if bytes == 0 {
+            break;
+        }
+        
+        if prev_item.line.trim_end() != line.trim_end() {
+            print(&prev_item);
+            
+            prev_item.line = line.clone();
+            prev_item.count = 1;
+        } else {
+            prev_item.count += 1;
+        }
+        line.clear();
+    }
+    
+    print(&prev_item);
+    
     Ok(())
+}
+
+fn open(filename: &str) -> MyResult<Box<dyn BufRead>> {
+    match filename {
+        "-" => Ok(Box::new(BufReader::new(std::io::stdin()))),
+        _ => Ok(Box::new(BufReader::new(std::fs::File::open(filename)?)))
+    }
 }
 
 // ############################################################################
