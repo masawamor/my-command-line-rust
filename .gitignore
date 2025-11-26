@@ -1,3 +1,5 @@
+Cargo.lock
+
 hello/target/*
 echor/target/*
 catr/target/*
